@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mind-compass 情绪罗盘</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary: #FF9FAC; 
+            --bg: #FFFBF5; 
+            --card-bg: #FFFFFF;
+            --text: #4A4A4A;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            margin: 0; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden;
+            transition: background 0.5s;
+        }
+
+        #app-container {
+            width: 100%; height: 100%; max-width: 420px;
+            position: relative; overflow: hidden;
+            background: var(--bg);
+            display: flex; flex-direction: column;
+        }
+
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            padding: 24px;
+            display: flex; flex-direction: column; align-items: center;
+            opacity: 0; pointer-events: none; transform: scale(0.95);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 1;
+        }
+        .screen.active { opacity: 1; pointer-events: auto; transform: scale(1); z-index: 10; }
+
+        h1 { font-size: 28px; color: var(--text); margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
+        h2 { color: var(--text); font-size: 22px; margin-bottom: 8px; text-align: center; font-weight: 700; }
+        .sub-text { font-size: 14px; color: #999; text-align: center; margin-bottom: 20px; }
+        
+        .btn {
+            background: #333; color: #fff; border: none; padding: 16px 40px; border-radius: 50px;
+            font-size: 16px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            cursor: pointer; transition: transform 0.1s; margin-top: auto; margin-bottom: 30px; width: 85%;
+        }
+        .btn:active { transform: scale(0.96); }
+
+        /* --- 0. 起始页 --- */
+        .intro-icon {
+            font-size: 80px; margin: 40px 0;
+            animation: float 4s ease-in-out infinite;
+        }
+        .intro-desc { font-size: 16px; color: #666; line-height: 1.8; text-align: center; max-width: 260px; }
+
+        /* --- 1. 情绪网格 --- */
+        .emotion-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            width: 100%; max-height: 55vh; overflow-y: auto; padding-bottom: 20px;
+        }
+        .emo-card {
+            background: #fff; border-radius: 16px; padding: 12px 5px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 2px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: all 0.2s;
+        }
+        .emo-card.selected {
+            border-color: var(--primary); transform: scale(1.1); box-shadow: 0 8px 20px rgba(0,0,0,0.1); background:#fff;
+        }
+        .emo-card span.emoji { font-size: 26px; margin-bottom: 6px; }
+        .emo-card span.label { font-size: 12px; font-weight: bold; color: #666; }
+
+        /* --- 2. 强度温度计 --- */
+        .thermometer-container {
+            width: 70px; height: 260px; background: #E8E8E8; border-radius: 35px;
+            position: relative; overflow: hidden; border: 4px solid #fff;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05); margin: 20px 0;
+        }
+        .mercury {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 50%;
+            background: linear-gradient(to top, var(--primary), #FFC3C3);
+            transition: height 0.2s ease; border-radius: 0 0 30px 30px;
+        }
+        .vertical-range {
+            position: absolute; bottom: 0; left: -115px; width: 300px; height: 70px;
+            transform: rotate(-90deg); transform-origin: 50% 50%; opacity: 0; cursor: pointer;
+        }
+        .intensity-score-display { font-size: 48px; font-weight: 800; color: var(--primary); }
+
+        /* --- 3. 时间与频率 --- */
+        .time-section { width: 100%; margin: 10px 0; padding: 20px; background: #fff; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.03); }
+        .time-icon { font-size: 50px; text-align: center; margin-bottom: 10px; transition: all 0.3s; display:block; }
+        
+        .slider-styled {
+            -webkit-appearance: none; width: 100%; height: 10px; border-radius: 5px;
+            background: #eee; outline: none; margin: 15px 0;
+        }
+        .slider-styled::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
+            background: var(--primary); border: 3px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer; transition: transform 0.2s;
+        }
+        .time-labels { display: flex; justify-content: space-between; font-size: 10px; color: #aaa; }
+        
+        .freq-container { display: flex; gap: 15px; margin-top: 15px; width: 100%; }
+        .freq-card {
+            flex: 1; background: #F5F5F5; border-radius: 12px; padding: 15px 10px;
+            text-align: center; cursor: pointer; border: 2px solid transparent;
+            transition: all 0.2s; display: flex; flex-direction: column; align-items: center;
+        }
+        .freq-card.selected { border-color: var(--primary); background: #FFF0F2; color: var(--primary); }
+        .freq-visual { height: 30px; width: 100%; margin-bottom: 5px; position: relative; }
+        .wave-line { stroke: #ccc; stroke-width: 3; fill: none; stroke-linecap: round; }
+        .freq-card.selected .wave-line { stroke: var(--primary); }
+
+        /* --- 4. 影响背包 --- */
+        .impact-scene { height: 150px; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+        .character { font-size: 80px; transition: transform 0.3s; z-index: 2; }
+        .backpack { font-size: 35px; position: absolute; top: 35px; right: 50%; margin-right: -40px; z-index: 3; transition: all 0.3s; }
+        .impact-tags-container { display: flex; gap: 8px; justify-content: center; width: 100%; flex-wrap: wrap; margin-top: 20px; }
+        .impact-tag { font-size: 12px; padding: 6px 12px; background: #fff; border-radius: 20px; color: #ccc; border: 1px solid #eee; }
+        .impact-tag.active { background: #FFF0F2; color: #FF6B6B; border-color: #FFB3B3; font-weight: bold; }
+
+        /* --- 5. 结果卡片 --- */
+        .result-card {
+            background: #fff; width: 100%; border-radius: 24px; padding: 25px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.08); margin-bottom: 20px;
+            border: 1px solid #f5f5f5; text-align: left; position: relative;
+        }
+        .badge-verdict {
+            position: absolute; top: -15px; right: 20px;
+            background: #333; color: #fff; padding: 8px 16px; border-radius: 20px;
+            font-size: 14px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transform: rotate(2deg); z-index: 5;
+        }
+        .res-header { display: flex; align-items: center; border-bottom: 1px dashed #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        .res-emoji { font-size: 40px; margin-right: 15px; }
+        .res-title { font-size: 20px; font-weight: bold; color: #333; }
+        .res-date { font-size: 12px; color: #aaa; }
+        
+        .res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .res-box { background: #F9F9F9; padding: 10px; border-radius: 10px; text-align: center; }
+        .res-box-label { font-size: 12px; color: #999; margin-bottom: 5px; }
+        .res-box-val { font-size: 16px; font-weight: bold; color: #555; }
+        .analysis-text {
+            font-size: 14px; color: #555; line-height: 1.6; background: #FAFAFA;
+            padding: 15px; border-radius: 12px; border-left: 4px solid var(--primary);
+        }
+
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-15px); } 100% { transform: translateY(0px); } }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 100;
+            display: none; justify-content: center; align-items: center; backdrop-filter: blur(2px);
+        }
+        .modal-content { background: #fff; padding: 20px; border-radius: 20px; width: 80%; }
+        .modal-input { width: 100%; padding: 10px; border: 2px solid #eee; border-radius: 10px; margin: 15px 0; outline:none; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+
+    <div id="screen-intro" class="screen active">
+        <h1 style="margin-top:40px;">Mind-compass</h1>
+        <h2 style="font-size:18px; color:#999; font-weight:normal;">情绪罗盘</h2>
+        <div class="intro-icon">🧭</div>
+        <p class="intro-desc">
+            情绪不是敌人，而是导航员。<br>
+            花一分钟，听听它想告诉你什么。
+        </p>
+        <button class="btn" onclick="navTo('screen-emotion')">开始记录</button>
+    </div>
+
+    <div id="screen-emotion" class="screen">
+        <h2>哈喽！今天的心情是？</h2>
+        <div class="emotion-grid" id="grid"></div>
+        <button class="btn" style="opacity:0.5; pointer-events:none;" id="btn-step1" onclick="navTo('screen-trigger')">下一步</button>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="text-align:center;">自定义情绪</h3>
+            <input type="text" id="custom-text" class="modal-input" placeholder="输入心情 (如: 纠结)">
+            <button class="btn" style="width:100%; margin:0;" onclick="confirmCustom()">确定</button>
+        </div>
+    </div>
+
+    <div id="screen-trigger" class="screen">
+        <h2>发生什么了？</h2>
+        <p class="sub-text">就把我当成你的好朋友说几句吧</p>
+        <div style="width:100%; background:#fff; border-radius:20px; padding:20px; box-shadow:0 5px 20px rgba(0,0,0,0.03);">
+            <textarea id="event-input" placeholder="例如：刚才和朋友吵了一架..." 
+            style="width:100%; height:100px; border:none; resize:none; font-family:inherit; font-size:16px; outline:none;"></textarea>
+        </div>
+        
+        <h3 style="font-size:16px; margin-top:30px; color:#666;">这件事本身有多严重？</h3>
+        <p style="font-size:12px; color:#999; margin-top:-5px;">(如果发生在别人身上，你会打几分?)</p>
+        <div style="display:flex; align-items:center; gap:10px; width:100%;">
+            <input type="range" style="flex:1; accent-color:#666;" min="1" max="10" value="5" oninput="updateSeverity(this.value)">
+            <span id="sev-display" style="font-weight:bold; width:30px;">5</span>
+        </div>
+        
+        <button class="btn" onclick="navTo('screen-intensity')">下一步</button>
+    </div>
+
+    <div id="screen-intensity" class="screen">
+        <h2>你的感受有多强？</h2>
+        <p class="sub-text">对你的内心冲击有多大</p>
+        
+        <div class="intensity-score-display" id="int-score">5</div>
+        <div style="font-size:14px; color:var(--primary); font-weight:bold;" id="int-desc">中等强度</div>
+
+        <div class="thermometer-container">
+            <div class="mercury" id="mercury"></div>
+            <input type="range" class="vertical-range" min="1" max="10" value="5" oninput="updateIntensity(this.value)">
+        </div>
+        
+        <button class="btn" onclick="navTo('screen-time')">确认</button>
+    </div>
+
+    <div id="screen-time" class="screen">
+        <h2>时间与频率</h2>
+        <p class="sub-text">这情绪怎么缠着你的？</p>
+        
+        <div class="time-section">
+            <div style="text-align:center; margin-bottom:10px;">
+                <span id="time-icon" class="time-icon">🌱</span>
+                <strong id="time-text" style="font-size:18px; color:#333;">一天内 (急性)</strong>
+            </div>
+            <input type="range" class="slider-styled" min="0" max="5" step="1" value="0" oninput="updateTime(this.value)">
+            <div class="time-labels">
+                <span>1天</span><span>几天</span><span>1周</span><span>1月</span><span>3月</span><span>半年</span>
+            </div>
+        </div>
+
+        <div class="freq-container">
+            <div class="freq-card selected" id="freq-cont" onclick="selectFreq('cont')">
+                <div class="freq-visual">
+                    <svg width="100%" height="30" viewBox="0 0 100 30">
+                        <line x1="0" y1="15" x2="100" y2="15" class="wave-line" />
+                    </svg>
+                </div>
+                <div style="font-size:14px; font-weight:bold;">一直都在</div>
+                <div style="font-size:10px; color:#999;">Continuous</div>
+            </div>
+            <div class="freq-card" id="freq-inter" onclick="selectFreq('inter')">
+                <div class="freq-visual">
+                    <svg width="100%" height="30" viewBox="0 0 100 30">
+                        <path d="M0,15 Q25,5 50,15 T100,15" class="wave-line" fill="none"/>
+                    </svg>
+                </div>
+                <div style="font-size:14px; font-weight:bold;">时好时坏</div>
+                <div style="font-size:10px; color:#999;">Intermittent</div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="navTo('screen-impact')">下一步</button>
+    </div>
+
+    <div id="screen-impact" class="screen">
+        <h2>生活影响</h2>
+        <p class="sub-text">有没有让你做不了事？</p>
+        
+        <div class="impact-scene">
+            <div class="backpack" id="backpack-visual">🎒</div>
+            <div class="character" id="char-visual">🙂</div>
+        </div>
+        <div style="text-align:center; font-weight:bold; font-size:24px; color:var(--primary); margin:10px 0;">
+            <span id="impact-score">3</span> 分
+        </div>
+        <div style="width:90%;">
+            <input type="range" class="slider-styled" min="1" max="10" value="3" oninput="updateImpact(this.value)">
+        </div>
+        <div class="impact-tags-container">
+            <span class="impact-tag" id="tag-focus">🧠 无法专心</span>
+            <span class="impact-tag" id="tag-study">📚 没法学习</span>
+            <span class="impact-tag" id="tag-sleep">💤 影响睡眠</span>
+            <span class="impact-tag" id="tag-eat">🍚 没胃口</span>
+        </div>
+        <button class="btn" onclick="generateReport()">生成罗盘报告</button>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h2>罗盘鉴定报告</h2>
+        <p class="sub-text">心理综合分析结果</p>
+        
+        <div id="capture-area" class="result-card">
+            <div class="badge-verdict" id="res-verdict">分析中...</div>
+            <div class="res-header">
+                <div class="res-emoji" id="res-emoji">😐</div>
+                <div>
+                    <div class="res-title" id="res-emo-name">情绪名</div>
+                    <div class="res-date" id="res-date">2023.11.24</div>
+                </div>
+            </div>
+            <div class="res-grid">
+                <div class="res-box">
+                    <div class="res-box-label">持续时间</div>
+                    <div class="res-box-val" id="res-time-txt">1天</div>
+                </div>
+                <div class="res-box">
+                    <div class="res-box-label">频率模式</div>
+                    <div class="res-box-val" id="res-freq-txt">持续</div>
+                </div>
+            </div>
+            <div style="font-size:13px; color:#666; margin-bottom:15px; border-bottom:1px dashed #eee; padding-bottom:10px;">
+                <strong>诱因：</strong><span id="res-event">...</span>
+            </div>
+            <div class="analysis-text">
+                <strong style="display:block; margin-bottom:5px;">📋 心理分析师：</strong>
+                <span id="res-analysis">...</span>
+            </div>
+            <div style="text-align:center; font-size:10px; color:#ddd; margin-top:15px;">Mind-compass V7.0</div>
+        </div>
+        <button class="btn" onclick="saveImage()">📥 保存卡片</button>
+        <button class="btn" style="background:transparent; color:#999; margin:0;" onclick="location.reload()">返回</button>
+    </div>
+
+</div>
+
+<script>
+    // 增加 type: pos(积极) / neg(消极) 字段，用于专业判断
+    const emotions = [
+        { label: '开心', emoji: '😆', color: '#FFD93D', type: 'pos' }, 
+        { label: '平静', emoji: '😌', color: '#88D8B0', type: 'pos' },
+        { label: '自豪', emoji: '😎', color: '#FF8066', type: 'pos' }, 
+        { label: '愤怒', emoji: '😡', color: '#FF6B6B', type: 'neg' },
+        { label: '烦躁', emoji: '😒', color: '#E05D5D', type: 'neg' }, 
+        { label: '委屈', emoji: '🥺', color: '#9EBAAA', type: 'neg' },
+        { label: '崩溃', emoji: '🤯', color: '#C70039', type: 'neg' }, 
+        { label: '悲伤', emoji: '😭', color: '#4D96FF', type: 'neg' },
+        { label: '失望', emoji: '😔', color: '#7FA6C4', type: 'neg' }, 
+        { label: '疲惫', emoji: '😫', color: '#9FA3A8', type: 'neg' },
+        { label: '焦虑', emoji: '😰', color: '#9B89B3', type: 'neg' }, 
+        { label: '紧张', emoji: '😬', color: '#B39CD0', type: 'neg' },
+        { label: '恐惧', emoji: '😨', color: '#845EC2', type: 'neg' }, 
+        { label: '迷茫', emoji: '😵', color: '#A0A0A0', type: 'neg' },
+        { label: '嫉妒', emoji: '🍋', color: '#D4E157', type: 'neg' }, 
+        { label: '麻木', emoji: '😑', color: '#C4C4C4', type: 'neg' }
+    ];
+
+    let state = {
+        emoName: '', emoEmoji: '', color: '', type: 'neg',
+        event: '', severity: 5, intensity: 5,
+        timeIndex: 0, frequency: 'cont', impact: 3
+    };
+
+    // Init Grid
+    const grid = document.getElementById('grid');
+    emotions.forEach(emo => {
+        const div = document.createElement('div');
+        div.className = 'emo-card';
+        div.innerHTML = `<span class="emoji">${emo.emoji}</span><span class="label">${emo.label}</span>`;
+        div.onclick = () => selectEmo(emo, div);
+        grid.appendChild(div);
+    });
+    // Custom Btn
+    const customBtn = document.createElement('div');
+    customBtn.className = 'emo-card';
+    customBtn.style.border = "2px dashed #ccc";
+    customBtn.innerHTML = `<span class="emoji">➕</span><span class="label">自定义</span>`;
+    customBtn.onclick = () => document.getElementById('custom-modal').style.display = 'flex';
+    grid.appendChild(customBtn);
+
+    function navTo(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function selectEmo(emoData, el) {
+        state.emoName = emoData.label; 
+        state.emoEmoji = emoData.emoji; 
+        state.color = emoData.color;
+        state.type = emoData.type; // 记录情绪类型
+        
+        document.querySelectorAll('.emo-card').forEach(c => c.classList.remove('selected'));
+        if(el) el.classList.add('selected');
+        document.documentElement.style.setProperty('--primary', emoData.color);
+        document.getElementById('btn-step1').style.opacity = 1;
+        document.getElementById('btn-step1').style.pointerEvents = 'auto';
+    }
+
+    function confirmCustom() {
+        const val = document.getElementById('custom-text').value.trim();
+        if(val) {
+            let autoEmoji = '✨'; 
+            // 简单的关键词匹配表情
+            const map = {
+                '怒': '😡', '气': '😡', '烦': '😒', '恨': '🤬', '火': '🔥',
+                '喜': '😆', '乐': '🤩', '笑': '😄', '爽': '😎',
+                '哀': '😭', '哭': '😭', '痛': '😣', '丧': '😞', '苦': '😫',
+                '怕': '😨', '惊': '😱', '慌': '😰', '爱': '🥰', '饿': '🤤'
+            };
+            for (let key in map) if (val.includes(key)) autoEmoji = map[key];
+            
+            // 默认为消极，除非包含特定正向词
+            let customType = 'neg';
+            if (['喜','乐','笑','爽','爱','好','棒'].some(k => val.includes(k))) customType = 'pos';
+
+            selectEmo({label:val, emoji:autoEmoji, color:'#999', type:customType}, null);
+            document.getElementById('custom-modal').style.display = 'none';
+            customBtn.innerHTML = `<span class="emoji">${autoEmoji}</span><span class="label">${val.substring(0,4)}</span>`;
+            customBtn.classList.add('selected');
+        }
+    }
+
+    function updateSeverity(val) { state.severity = parseInt(val); document.getElementById('sev-display').innerText = val; }
+
+    function updateIntensity(val) {
+        state.intensity = parseInt(val);
+        document.getElementById('int-score').innerText = val;
+        document.getElementById('mercury').style.height = (val * 10) + '%';
+        const descs = ["轻微", "微弱", "存在", "不适", "明显", "强烈", "剧烈", "痛苦", "极度", "失控"];
+        document.getElementById('int-desc').innerText = descs[val-1];
+    }
+
+    const timeOptions = [
+        { label: "1天内", icon: "🌱", desc: "刚刚萌芽 (急性)" },
+        { label: "几天", icon: "🌿", desc: "长出叶子了" },
+        { label: "1周", icon: "🍀", desc: "持续一周了" },
+        { label: "1月", icon: "🌳", desc: "扎根一个月" },
+        { label: "3月", icon: "🍂", desc: "整个季节" },
+        { label: "半年+", icon: "❄️", desc: "长期共存 (慢性)" }
+    ];
+    function updateTime(val) {
+        state.timeIndex = parseInt(val);
+        const opt = timeOptions[state.timeIndex];
+        document.getElementById('time-icon').innerText = opt.icon;
+        document.getElementById('time-text').innerText = opt.desc;
+    }
+    function selectFreq(type) {
+        state.frequency = type;
+        document.getElementById('freq-cont').classList.toggle('selected', type === 'cont');
+        document.getElementById('freq-inter').classList.toggle('selected', type === 'inter');
+    }
+
+    function updateImpact(val) {
+        state.impact = parseInt(val);
+        document.getElementById('impact-score').innerText = val;
+        const char = document.getElementById('char-visual');
+        const pack = document.getElementById('backpack-visual');
+        if(val <= 3) { char.innerText = "🙂"; pack.innerText = "🎒"; pack.style.transform = "scale(1)"; }
+        else if(val <= 6) { char.innerText = "😐"; pack.innerText = "🪨"; pack.style.transform = "scale(1.4)"; }
+        else { char.innerText = "😣"; pack.innerText = "🏔️"; pack.style.transform = "scale(1.8)"; }
+
+        document.getElementById('tag-focus').classList.toggle('active', val >= 4);
+        document.getElementById('tag-study').classList.toggle('active', val >= 6);
+        document.getElementById('tag-sleep').classList.toggle('active', val >= 8);
+        document.getElementById('tag-eat').classList.toggle('active', val >= 8);
+    }
+
+    // --- 核心更新：符合心理学专业的综合判断逻辑 ---
+    function generateReport() {
+        state.event = document.getElementById('event-input').value || "没说什么";
+        const date = new Date();
+        
+        document.getElementById('res-emoji').innerText = state.emoEmoji;
+        document.getElementById('res-emo-name').innerText = state.emoName;
+        document.getElementById('res-date').innerText = `${date.getMonth()+1}.${date.getDate()}`;
+        document.getElementById('res-event').innerText = state.event;
+        document.getElementById('res-time-txt').innerText = timeOptions[state.timeIndex].label;
+        document.getElementById('res-freq-txt').innerText = state.frequency === 'cont' ? '连续' : '间歇';
+
+        const diff = state.intensity - state.severity;
+        const verdictEl = document.getElementById('res-verdict');
+        const analysisEl = document.getElementById('res-analysis');
+        let verdict = "";
+        let analysis = "";
+        let color = "#333";
+
+        // 心理学专业判断逻辑树
+        
+        // 1. 积极情绪 (Positive Affect)
+        if (state.type === 'pos') {
+            verdict = "🌟 心理充能"; color = "#FFC107";
+            analysis = "这种积极情绪是你宝贵的心理资源（Psychological Capital）。它能提升你的心理韧性，建议你充分体验并记录下这一刻，在低谷时它会成为你的力量。";
+        }
+        // 2. 红色警报：严重功能受损 (Severe Functional Impairment)
+        else if (state.impact >= 8) {
+            verdict = "🚑 功能预警"; color = "#FF4757";
+            analysis = "注意！你的日常生活（睡眠/饮食/学习）已受到严重干扰。根据心理评估标准，当社会功能显著受损时，单纯的自我调节可能不够。建议立刻寻求专业心理支持或暂时停下来休息。";
+        }
+        // 3. 慢性风险：长期+连续 (Chronic Risk)
+        else if (state.timeIndex >= 4) {
+            if (state.frequency === 'cont') {
+                verdict = "🌧️ 长程心境"; color = "#576574";
+                analysis = "这种情绪已持续超过3个月且呈现连续性，可能已转化为一种稳定的心境（Mood）。请警惕‘习得性无助’，建议进行专业的心理咨询评估。";
+            } else {
+                verdict = "🍂 周期波动"; color = "#8395a7";
+                analysis = "情绪呈现长期的间歇性发作。这可能与特定的环境诱因或周期性压力有关，建议记录触发规律。";
+            }
+        }
+        // 4. 急性应激：大事+高反应+短时间 (Acute Stress)
+        else if (state.severity >= 8 && state.intensity >= 8 && state.timeIndex <= 2) {
+            verdict = "💥 急性应激"; color = "#FF6B6B";
+            analysis = "这是面对重大压力事件时的正常应激反应（Normal reaction to abnormal situation）。你的身心正在调动能量应对危机，请允许自己暂时失控，随后进行深呼吸等稳定化练习。";
+        }
+        // 5. 认知偏差：小事+大反应 (Cognitive Distortion / Overreaction)
+        else if (diff >= 3) {
+            verdict = "🔍 放大镜"; color = "#FA8231";
+            analysis = `你的情绪强度 (${state.intensity}) 显著高于事件客观严重度 (${state.severity})。心理学上这可能涉及‘灾难化思维’或‘情感置换’（其实是对别的事生气）。建议检查是否有非理性信念。`;
+        }
+        // 6. 情感隔离：大事+小反应 (Suppression / Detachment)
+        else if (diff <= -3 && state.severity >= 6) {
+            verdict = "🧊 情感隔离"; color = "#747D8C";
+            analysis = "面对较严重的事件，你的反应似乎过于平静。这可能是潜意识启动了‘防御机制’（如隔离或压抑）。保护自己没错，但也要防止情绪积压。";
+        }
+        // 7. 适应性反应 (Adaptive Response)
+        else {
+            verdict = "✅ 适应性反应"; color = "#2ED573";
+            analysis = "你的情绪反应与现实情境非常匹配（Congruence）。这是一种健康的心理调节能力——既不否认痛苦，也不被其淹没。你的‘情绪罗盘’工作状态良好！";
+        }
+
+        verdictEl.innerText = verdict;
+        verdictEl.style.backgroundColor = color;
+        analysisEl.innerText = analysis;
+        
+        navTo('screen-result');
+    }
+
+    function saveImage() {
+        const captureElement = document.getElementById('capture-area');
+        html2canvas(captureElement, { scale: 2, backgroundColor: "#ffffff" }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `MindCompass_${Date.now()}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        });
+    }
+</script>
+</body>
+</html>
