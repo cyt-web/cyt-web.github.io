@@ -2,596 +2,458 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>情感AI机器人设计</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MindCompass - 情绪罗盘</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        :root {
+            /* 默认主题色 */
+            --theme-color: #7FA6C4; 
+            --bg-color: #F8F9FA;
+            --text-color: #333;
         }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         
         body {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #eee;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #app-container {
+            width: 100%;
+            height: 100%;
+            max-width: 420px;
+            background: var(--bg-color);
+            position: relative;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            color: #fff;
+            transition: background 0.5s ease;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
         }
+
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            padding: 24px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            transform: scale(0.95);
+            background: var(--bg-color); /* 确保背景覆盖 */
+            z-index: 1;
+        }
+
+        .screen.active {
+            opacity: 1; pointer-events: auto; transform: scale(1); z-index: 10;
+        }
+
+        h1, h2 { margin: 0 0 10px 0; text-align: center; color: var(--text-color); }
+        p { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
         
-        .container {
-            max-width: 1200px;
+        .btn {
+            padding: 16px; border-radius: 12px; border: none;
+            background: #333; color: #fff; font-size: 16px; font-weight: 600;
+            cursor: pointer; width: 100%; margin-top: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+
+        /* --- 修改点1：20种情绪网格 --- */
+        .emotion-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
             width: 100%;
-            margin: 0 auto;
+            padding: 10px 0;
         }
-        
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px;
+        .emo-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #fff; border-radius: 12px;
+            padding: 10px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
+        .emo-btn span.emoji { font-size: 28px; margin-bottom: 4px; display: block;}
+        .emo-btn span.label { font-size: 12px; color: #555; }
         
-        h1 {
-            font-size: 3rem;
-            margin-bottom: 15px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        .emo-btn.selected {
+            border-color: var(--theme-color);
+            background-color: rgba(255,255,255,0.9);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        
-        .subtitle {
-            font-size: 1.3rem;
-            max-width: 800px;
-            margin: 0 auto 20px;
-            opacity: 0.9;
+
+        /* --- 修改点2：动态拖拽量化 --- */
+        .slider-wrapper {
+            width: 100px;
+            height: 320px;
+            background: #e0e0e0;
+            border-radius: 50px;
+            position: relative;
+            overflow: hidden;
+            margin: 20px 0;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.1);
+            touch-action: none; /* 防止页面滚动 */
         }
-        
-        .design-concept {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
+        .fluid-level {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            height: 50%; /* JS控制 */
+            background: var(--theme-color);
+            transition: height 0.1s linear, background 0.3s;
+            will-change: height;
         }
-        
-        .design-concept h2 {
-            margin-bottom: 15px;
-            text-align: center;
+        /* 液面波浪效果 */
+        .fluid-level::after {
+            content: ''; position: absolute; top: -10px; left: 0; width: 100%; height: 20px;
+            background: inherit; border-radius: 50%; opacity: 0.8;
+            transform: scaleX(1.2);
         }
-        
-        .design-concept p {
-            line-height: 1.6;
+        .slider-handle-text {
+            position: absolute; width: 100%; text-align: center;
+            bottom: 20px; color: rgba(255,255,255,0.8); font-size: 24px; font-weight: bold;
+            pointer-events: none; z-index: 5;
+        }
+        .intensity-number {
+            font-size: 60px; font-weight: 800; color: var(--theme-color);
             margin-bottom: 10px;
         }
-        
-        .content {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 30px;
-            justify-content: center;
+
+        /* 事件严重度滑块 */
+        .severity-slider {
+            -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px;
+            background: #ddd; outline: none; margin: 20px 0;
         }
-        
-        .emotion-selector {
-            flex: 1;
-            min-width: 300px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+        .severity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
+            background: #666; cursor: pointer; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
-        
-        .emotion-btn {
-            padding: 20px;
-            border: none;
-            border-radius: 15px;
-            font-size: 1.3rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        .emotion-btn:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-        
-        .emotion-btn i {
-            font-size: 1.5rem;
-        }
-        
-        .happy-btn {
-            background: linear-gradient(to right, #FFD166, #FFB347);
-            color: #8B6B00;
-        }
-        
-        .angry-btn {
-            background: linear-gradient(to right, #EF476F, #E71D36);
-            color: #fff;
-        }
-        
-        .sad-btn {
-            background: linear-gradient(to right, #118AB2, #073B4C);
-            color: #fff;
-        }
-        
-        .fear-btn {
-            background: linear-gradient(to right, #06D6A0, #048A81);
-            color: #003D2B;
-        }
-        
-        .robot-display {
-            flex: 2;
-            min-width: 300px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
+
+        /* --- 修改点3：结果卡片保存 --- */
+        .result-card-container {
+            background: #fff;
             padding: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .robot-container {
-            position: relative;
-            width: 300px;
-            height: 450px;
-            margin-bottom: 30px;
-        }
-        
-        .robot-head {
-            position: absolute;
-            width: 180px;
-            height: 180px;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            border-radius: 50%;
-            background-color: #E0E0E0;
-            transition: all 0.5s ease;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        .robot-body {
-            position: absolute;
-            width: 200px;
-            height: 180px;
-            bottom: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #C0C0C0;
-            border-radius: 30px 30px 20px 20px;
-            transition: all 0.5s ease;
-            z-index: 5;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        .robot-arms {
-            position: absolute;
-            width: 260px;
-            height: 60px;
-            bottom: 140px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            justify-content: space-between;
-            z-index: 4;
-            transition: all 0.5s ease;
-        }
-        
-        .arm {
-            width: 40px;
-            height: 120px;
-            background-color: #C0C0C0;
             border-radius: 20px;
-            transition: all 0.5s ease;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-        }
-        
-        .robot-legs {
-            position: absolute;
-            width: 120px;
-            height: 80px;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            justify-content: space-between;
-            z-index: 3;
-        }
-        
-        .leg {
-            width: 30px;
-            height: 80px;
-            background-color: #A0A0A0;
-            border-radius: 15px 15px 5px 5px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-        }
-        
-        /* 面部特征 */
-        .eyes {
-            display: flex;
-            gap: 40px;
-            margin-top: 30px;
-        }
-        
-        .eye {
-            width: 30px;
-            height: 40px;
-            background-color: #333;
-            border-radius: 50%;
-            transition: all 0.5s ease;
-        }
-        
-        .mouth {
-            width: 80px;
-            height: 20px;
-            background-color: #333;
-            margin-top: 20px;
-            border-radius: 10px;
-            transition: all 0.5s ease;
-        }
-        
-        /* 情绪特定样式 */
-        .happy .robot-head {
-            background: linear-gradient(to bottom, #FFE082, #FFB347);
-            border-radius: 50%;
-        }
-        
-        .happy .eyes .eye {
-            height: 20px;
-            border-radius: 10px 10px 0 0;
-        }
-        
-        .happy .mouth {
-            height: 40px;
-            border-radius: 0 0 40px 40px;
-            background-color: #FF8A65;
-        }
-        
-        .happy .robot-body {
-            background: linear-gradient(to bottom, #FFD54F, #FFB300);
-        }
-        
-        .happy .arm {
-            background: linear-gradient(to bottom, #FFD54F, #FFB300);
-            transform: rotate(-20deg);
-        }
-        
-        .happy .arm:last-child {
-            transform: rotate(20deg);
-        }
-        
-        .angry .robot-head {
-            background: linear-gradient(to bottom, #FF8A65, #E53935);
-            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-        }
-        
-        .angry .eyes .eye {
-            height: 15px;
-            border-radius: 0;
-            transform: rotate(20deg);
-        }
-        
-        .angry .eyes .eye:last-child {
-            transform: rotate(-20deg);
-        }
-        
-        .angry .mouth {
-            height: 10px;
-            width: 60px;
-            border-radius: 5px;
-            background-color: #D84315;
-        }
-        
-        .angry .robot-body {
-            background: linear-gradient(to bottom, #FF7043, #D84315);
-        }
-        
-        .angry .arm {
-            background: linear-gradient(to bottom, #FF7043, #D84315);
-            transform: rotate(-45deg);
-        }
-        
-        .angry .arm:last-child {
-            transform: rotate(45deg);
-        }
-        
-        .sad .robot-head {
-            background: linear-gradient(to bottom, #81D4FA, #0288D1);
-            border-radius: 40% 40% 60% 60% / 60% 60% 40% 40%;
-        }
-        
-        .sad .eyes .eye {
-            height: 30px;
-            border-radius: 0 0 15px 15px;
-        }
-        
-        .sad .mouth {
-            height: 10px;
-            width: 60px;
-            border-radius: 0 0 30px 30px;
-            background-color: #0277BD;
-        }
-        
-        .sad .robot-body {
-            background: linear-gradient(to bottom, #4FC3F7, #0288D1);
-        }
-        
-        .sad .arm {
-            background: linear-gradient(to bottom, #4FC3F7, #0288D1);
-            transform: rotate(10deg);
-        }
-        
-        .sad .arm:last-child {
-            transform: rotate(-10deg);
-        }
-        
-        .fear .robot-head {
-            background: linear-gradient(to bottom, #80CBC4, #00695C);
-            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-        }
-        
-        .fear .eyes .eye {
-            height: 35px;
-            width: 35px;
-            border-radius: 50%;
-        }
-        
-        .fear .mouth {
-            height: 25px;
-            width: 25px;
-            border-radius: 50%;
-            background-color: #004D40;
-        }
-        
-        .fear .robot-body {
-            background: linear-gradient(to bottom, #26A69A, #00695C);
-        }
-        
-        .fear .arm {
-            background: linear-gradient(to bottom, #26A69A, #00695C);
-            transform: rotate(30deg);
-        }
-        
-        .fear .arm:last-child {
-            transform: rotate(-30deg);
-        }
-        
-        .emotion-info {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 25px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             width: 100%;
-            margin-top: 20px;
-        }
-        
-        .emotion-title {
-            font-size: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             margin-bottom: 20px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-        
-        .emotion-description {
-            font-size: 1.2rem;
-            line-height: 1.7;
-            margin-bottom: 25px;
-            text-align: justify;
-        }
-        
-        .language-feature {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        
-        .language-feature h3 {
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .language-feature p {
-            font-size: 1.1rem;
-            line-height: 1.6;
-        }
-        
-        .speech-bubble {
             position: relative;
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
-            padding: 15px 20px;
-            border-radius: 20px;
-            margin-top: 15px;
-            font-style: italic;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            /* 加上这个为了截图时不包含圆角外的背景 */
+            transform: translateZ(0); 
+        }
+        .result-card-container::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 8px;
+            background: var(--theme-color);
+        }
+        .card-header { display: flex; align-items: center; margin-bottom: 20px; }
+        .card-emoji { font-size: 40px; margin-right: 15px; }
+        .card-title { font-size: 20px; font-weight: bold; color: #333; }
+        .card-date { font-size: 12px; color: #999; margin-top: 4px; }
+        .card-body { font-size: 15px; line-height: 1.6; color: #555; background: #f9f9f9; padding: 15px; border-radius: 10px; }
+        .card-suggestion { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; }
+        .suggestion-tag { 
+            display: inline-block; padding: 4px 8px; border-radius: 4px; 
+            font-size: 12px; background: var(--theme-color); color: #fff; margin-bottom: 8px;
         }
         
-        .speech-bubble:after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 50px;
-            border-width: 10px 10px 0;
-            border-style: solid;
-            border-color: rgba(255, 255, 255, 0.9) transparent;
-        }
-        
-        @media (max-width: 768px) {
-            .content {
-                flex-direction: column;
-            }
-            
-            .emotion-selector {
-                width: 100%;
-            }
-            
-            h1 {
-                font-size: 2.2rem;
-            }
-            
-            .subtitle {
-                font-size: 1.1rem;
-            }
-        }
+        /* 辅助类 */
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><i class="fas fa-robot"></i> 情感AI机器人设计</h1>
-            <p class="subtitle">探索AI情感表达的可能性 - 通过面部表情、肢体动作和语言特征展现四种基本情绪</p>
-        </header>
-        
-        <div class="design-concept">
-            <h2><i class="fas fa-lightbulb"></i> 设计理念</h2>
-            <p>本设计探索如何让AI机器人通过视觉元素（面部表情、肢体动作）和语言特征来表达基本情感。通过这种方式，我们可以让AI与人类的交互更加自然和富有情感。</p>
-            <p>每种情绪都有独特的设计元素：喜悦使用圆形和开放姿态，愤怒使用方形和对抗姿态，悲伤使用水滴形和蜷缩姿态，恐惧使用不规则形状和防御姿态。</p>
-        </div>
-        
-        <div class="content">
-            <div class="emotion-selector">
-                <button class="emotion-btn happy-btn" data-emotion="happy">
-                    <i class="fas fa-laugh-beam"></i>
-                    <span>喜喜 - 喜悦情绪</span>
-                </button>
-                <button class="emotion-btn angry-btn" data-emotion="angry">
-                    <i class="fas fa-angry"></i>
-                    <span>怒怒 - 愤怒情绪</span>
-                </button>
-                <button class="emotion-btn sad-btn" data-emotion="sad">
-                    <i class="fas fa-sad-tear"></i>
-                    <span>哀哀 - 悲伤情绪</span>
-                </button>
-                <button class="emotion-btn fear-btn" data-emotion="fear">
-                    <i class="fas fa-surprise"></i>
-                    <span>惧惧 - 恐惧情绪</span>
-                </button>
-            </div>
-            
-            <div class="robot-display">
-                <div class="robot-container">
-                    <div class="robot-head">
-                        <div class="eyes">
-                            <div class="eye"></div>
-                            <div class="eye"></div>
-                        </div>
-                        <div class="mouth"></div>
-                    </div>
-                    <div class="robot-arms">
-                        <div class="arm"></div>
-                        <div class="arm"></div>
-                    </div>
-                    <div class="robot-body"></div>
-                    <div class="robot-legs">
-                        <div class="leg"></div>
-                        <div class="leg"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="emotion-info">
-            <h2 class="emotion-title" id="emotion-title"><i class="fas fa-laugh-beam"></i> 喜喜 - 喜悦情绪</h2>
-            <p class="emotion-description" id="emotion-description">喜悦情绪通过圆形头部、上扬的眼睛和微笑的大嘴表达。肢体动作上，机器人张开双臂，身体微微前倾，表现出欢迎和快乐的姿态。这种设计传递出积极、开放和友好的情感信号。</p>
-            
-            <div class="language-feature">
-                <h3><i class="fas fa-comment-dots"></i> 语言特征</h3>
-                <p id="language-description">喜悦情绪的语言通常积极向上、充满热情，使用明亮的语调和较快的语速，包含许多积极词汇和感叹词。</p>
-                <div class="speech-bubble" id="speech-example">
-                    "太棒了！今天真是美好的一天！我很高兴能和你交流！"
-                </div>
-            </div>
-        </div>
+
+<div id="app-container">
+    
+    <div id="screen-intro" class="screen active">
+        <h1 style="font-size: 28px;">MindCompass</h1>
+        <p>捕捉情绪 · 量化评估 · 智慧调理</p>
+        <div style="font-size: 60px; margin: 40px 0; animation: float 3s infinite ease-in-out;">🧭</div>
+        <button class="btn" onclick="navTo('screen-emotion')">开始记录</button>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const emotionButtons = document.querySelectorAll('.emotion-btn');
-            const robotContainer = document.querySelector('.robot-container');
-            const emotionTitle = document.getElementById('emotion-title');
-            const emotionDescription = document.getElementById('emotion-description');
-            const languageDescription = document.getElementById('language-description');
-            const speechExample = document.getElementById('speech-example');
+    <div id="screen-emotion" class="screen">
+        <h2>现在感觉如何？</h2>
+        <p>点击最符合当下的情绪</p>
+        <div class="emotion-grid" id="emotion-grid-container">
+            </div>
+        <button class="btn" id="emo-next-btn" style="opacity:0.3; pointer-events:none;" onclick="navTo('screen-intensity')">下一步</button>
+    </div>
+
+    <div id="screen-intensity" class="screen">
+        <h2>情绪有多强烈？</h2>
+        <div class="intensity-number" id="intensity-val">5</div>
+        <p>按住液面上下拖动</p>
+        
+        <div class="slider-wrapper" id="drag-slider">
+            <div class="fluid-level" id="fluid-level"></div>
+            <div class="slider-handle-text">↕</div>
+        </div>
+
+        <button class="btn" onclick="navTo('screen-event')">确认强度</button>
+    </div>
+
+    <div id="screen-event" class="screen">
+        <h2>发生了什么？</h2>
+        <div style="width:100%; margin-bottom:30px;">
+            <textarea id="event-input" placeholder="简单描述一下..." style="width:100%; height:80px; padding:15px; border-radius:12px; border:1px solid #ddd; resize:none; font-family:inherit;"></textarea>
+        </div>
+        
+        <h2>客观来说多严重？</h2>
+        <p>如果这事发生在新闻里或别人身上</p>
+        <div style="font-size:32px; font-weight:bold; color:#666; margin:10px 0;" id="severity-val">5</div>
+        <input type="range" class="severity-slider" min="1" max="10" value="5" oninput="updateSeverity(this.value)">
+        <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; color:#999;">
+            <span>微小琐事</span>
+            <span>中等挫折</span>
+            <span>人生变故</span>
+        </div>
+
+        <button class="btn" onclick="generateResult()">生成分析</button>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h2>情绪分析报告</h2>
+        <p>截图已生成，可保存至相册</p>
+        
+        <div id="capture-area" class="result-card-container">
+            <div class="card-header">
+                <span class="card-emoji" id="res-emoji">😐</span>
+                <div>
+                    <div class="card-title" id="res-emotion-name">情绪名称</div>
+                    <div class="card-date" id="res-date">2023.11.24</div>
+                </div>
+            </div>
             
-            // 情绪数据
-            const emotionData = {
-                happy: {
-                    title: '喜喜 - 喜悦情绪',
-                    icon: 'fas fa-laugh-beam',
-                    description: '喜悦情绪通过圆形头部、上扬的眼睛和微笑的大嘴表达。肢体动作上，机器人张开双臂，身体微微前倾，表现出欢迎和快乐的姿态。这种设计传递出积极、开放和友好的情感信号。',
-                    language: '喜悦情绪的语言通常积极向上、充满热情，使用明亮的语调和较快的语速，包含许多积极词汇和感叹词。',
-                    speech: '"太棒了！今天真是美好的一天！我很高兴能和你交流！"'
-                },
-                angry: {
-                    title: '怒怒 - 愤怒情绪',
-                    icon: 'fas fa-angry',
-                    description: '愤怒情绪通过方形头部、倒八字眉毛和咬牙切齿的表情表达。肢体动作上，机器人双手叉腰，身体挺直，表现出对抗和不满的姿态。这种设计传递出防御性、对抗性和不满的情感信号。',
-                    language: '愤怒情绪的语言通常简短有力、语气强烈，使用重音和较高的音量，包含许多指责性和否定性词汇。',
-                    speech: '"这简直不可理喻！我完全不能接受这种情况！"'
-                },
-                sad: {
-                    title: '哀哀 - 悲伤情绪',
-                    icon: 'fas fa-sad-tear',
-                    description: '悲伤情绪通过水滴形头部、下垂的眼睛和嘴角下弯表达。肢体动作上，机器人肩膀下垂，双手抱膝，呈现出蜷缩和低能量的姿态。这种设计传递出失落、无助和需要安慰的情感信号。',
-                    language: '悲伤情绪的语言通常缓慢低沉、充满无奈，使用较低的音量和较慢的语速，包含许多消极和无奈表达的词汇。',
-                    speech: '"唉...我觉得很难过...一切都变得没有意义了..."'
-                },
-                fear: {
-                    title: '惧惧 - 恐惧情绪',
-                    icon: 'fas fa-surprise',
-                    description: '恐惧情绪通过不规则多边形头部、大而圆的眼睛和O形嘴表达。肢体动作上，机器人双手护胸，身体后仰，表现出退缩和防御的姿态。这种设计传递出警惕、不安和想要逃避的情感信号。',
-                    language: '恐惧情绪的语言通常断断续续、充满不确定性，使用颤抖的声音和犹豫的语气，包含许多疑问和不确定表达的词汇。',
-                    speech: '"我...我有点害怕...这不会有什么问题吧？我真的不确定..."'
-                }
-            };
+            <div class="card-body">
+                <strong>事件：</strong> <span id="res-event">...</span><br><br>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                    <span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:12px;">强度: <span id="res-int">0</span>/10</span>
+                    <span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:12px;">严重度: <span id="res-sev">0</span>/10</span>
+                </div>
+            </div>
+
+            <div class="card-suggestion">
+                <span class="suggestion-tag" id="res-tag">建议</span>
+                <div id="res-advice" style="font-size:14px; color:#333; font-weight:500;">
+                    建议内容...
+                </div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="saveCard()">📥 保存到相册</button>
+        <button class="btn" style="background:transparent; color:#999; margin-top:10px;" onclick="location.reload()">重新记录</button>
+    </div>
+
+</div>
+
+<script>
+    // --- 数据配置：20种情绪 ---
+    // 喜(Joy-黄), 怒(Anger-红), 哀(Sad-蓝), 惧(Fear-紫), 杂(Mix-青)
+    const emotions = [
+        // Row 1: Joy (Yellow/Orange)
+        { label: '开心', emoji: '😆', color: '#FFD93D', type: 'pos' },
+        { label: '放松', emoji: '😌', color: '#FFC75F', type: 'pos' },
+        { label: '兴奋', emoji: '🤩', color: '#FF9642', type: 'pos' },
+        { label: '幸福', emoji: '🥰', color: '#FF8066', type: 'pos' },
+        // Row 2: Anger (Red)
+        { label: '愤怒', emoji: '😡', color: '#FF6B6B', type: 'neg' },
+        { label: '挫败', emoji: '😤', color: '#E05D5D', type: 'neg' },
+        { label: '烦躁', emoji: '😒', color: '#D98C8C', type: 'neg' },
+        { label: '暴怒', emoji: '🤬', color: '#C70039', type: 'neg' },
+        // Row 3: Sadness (Blue)
+        { label: '悲伤', emoji: '😭', color: '#4D96FF', type: 'neg' },
+        { label: '失望', emoji: '😔', color: '#6BCB77', type: 'neg' }, // Greenish blue
+        { label: '孤独', emoji: '😞', color: '#3AB4F2', type: 'neg' },
+        { label: '疲惫', emoji: '😫', color: '#7FA6C4', type: 'neg' },
+        // Row 4: Fear/Anxiety (Purple)
+        { label: '恐惧', emoji: '😨', color: '#845EC2', type: 'neg' },
+        { label: '焦虑', emoji: '😰', color: '#9B89B3', type: 'neg' },
+        { label: '紧张', emoji: '😬', color: '#B39CD0', type: 'neg' },
+        { label: '羞耻', emoji: '😳', color: '#D65DB1', type: 'neg' },
+        // Row 5: Others
+        { label: '嫉妒', emoji: '😠', color: '#FF5E78', type: 'neg' },
+        { label: '委屈', emoji: '🥺', color: '#9EBAAA', type: 'neg' },
+        { label: '迷茫', emoji: '😵', color: '#A0A0A0', type: 'neg' },
+        { label: '麻木', emoji: '😐', color: '#7E7E7E', type: 'neg' }
+    ];
+
+    // 全局状态
+    let state = {
+        selectedEmo: null,
+        intensity: 5,
+        severity: 5,
+        eventText: ""
+    };
+
+    // 初始化情绪网格
+    const grid = document.getElementById('emotion-grid-container');
+    emotions.forEach((emo, index) => {
+        const btn = document.createElement('div');
+        btn.className = 'emo-btn';
+        btn.innerHTML = `<span class="emoji">${emo.emoji}</span><span class="label">${emo.label}</span>`;
+        btn.onclick = () => selectEmotion(index, btn);
+        grid.appendChild(btn);
+    });
+
+    // 导航
+    function navTo(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // 1. 选择情绪逻辑
+    function selectEmotion(index, btnEl) {
+        state.selectedEmo = emotions[index];
+        
+        // UI 更新
+        document.querySelectorAll('.emo-btn').forEach(b => b.classList.remove('selected'));
+        btnEl.classList.add('selected');
+        
+        // 更新主题色
+        document.documentElement.style.setProperty('--theme-color', state.selectedEmo.color);
+        
+        // 激活按钮
+        const nextBtn = document.getElementById('emo-next-btn');
+        nextBtn.style.opacity = 1;
+        nextBtn.style.pointerEvents = 'auto';
+    }
+
+    // 2. 动态拖拽逻辑 (Mouse & Touch)
+    const slider = document.getElementById('drag-slider');
+    const level = document.getElementById('fluid-level');
+    const valDisplay = document.getElementById('intensity-val');
+    let isDragging = false;
+
+    function updateLevel(clientY) {
+        const rect = slider.getBoundingClientRect();
+        let y = clientY - rect.top; // y position relative to slider top
+        // Clamp
+        if (y < 0) y = 0;
+        if (y > rect.height) y = rect.height;
+        
+        // Calculate percentage (0 at bottom, 1 at top) -> 实际上 y=0 is top
+        let pct = 1 - (y / rect.height);
+        
+        // Update CSS height
+        level.style.height = (pct * 100) + '%';
+        
+        // Map to 1-10 integer
+        let score = Math.ceil(pct * 10);
+        if (score < 1) score = 1;
+        state.intensity = score;
+        valDisplay.innerText = score;
+    }
+
+    // Mouse Events
+    slider.addEventListener('mousedown', (e) => { isDragging = true; updateLevel(e.clientY); });
+    window.addEventListener('mousemove', (e) => { if(isDragging) { e.preventDefault(); updateLevel(e.clientY); } });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // Touch Events
+    slider.addEventListener('touchstart', (e) => { isDragging = true; updateLevel(e.touches[0].clientY); });
+    window.addEventListener('touchmove', (e) => { 
+        if(isDragging) { 
+            e.preventDefault(); // 阻止滚动
+            updateLevel(e.touches[0].clientY); 
+        } 
+    }, {passive: false});
+    window.addEventListener('touchend', () => { isDragging = false; });
+
+
+    // 3. 严重度更新
+    function updateSeverity(val) {
+        state.severity = val;
+        document.getElementById('severity-val').innerText = val;
+    }
+
+    // 4. 生成结果
+    function generateResult() {
+        state.eventText = document.getElementById('event-input').value || "未记录具体事件";
+        const date = new Date();
+        
+        // 填充卡片数据
+        document.getElementById('res-emoji').innerText = state.selectedEmo.emoji;
+        document.getElementById('res-emotion-name').innerText = state.selectedEmo.label;
+        document.getElementById('res-date').innerText = `${date.getFullYear()}.${date.getMonth()+1}.${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2,'0')}`;
+        document.getElementById('res-event').innerText = state.eventText;
+        document.getElementById('res-int').innerText = state.intensity;
+        document.getElementById('res-sev').innerText = state.severity;
+        
+        // 核心评估逻辑
+        const tagEl = document.getElementById('res-tag');
+        const adviceEl = document.getElementById('res-advice');
+        
+        // 逻辑分支
+        if (state.selectedEmo.type === 'pos') {
+            // 正面情绪
+            tagEl.innerText = "✨ 值得记录";
+            adviceEl.innerText = "积极的情绪是心理能量的来源。好好享受这一刻，把它存进你的能量银行吧！";
+        } else {
+            // 负面情绪
+            let delta = state.intensity - state.severity;
+            if (delta > 2) {
+                // 过度反应 -> 调理
+                tagEl.innerText = "🌊 情绪过载";
+                adviceEl.innerHTML = "你的反应强度显著高于事件本身。这表明你可能累了，或者触碰了深层扳机点。<br>建议：深呼吸，先处理情绪，再处理事情。";
+            } else if (state.intensity >= 8 && state.severity >= 8) {
+                // 合理但痛苦 -> 支持
+                tagEl.innerText = "🛡️ 艰难时刻";
+                adviceEl.innerText = "这是一次重大的冲击，感到崩溃是完全正常的。不要对自己太苛刻，允许自己悲伤。";
+            } else {
+                // 适应性 -> 表达
+                tagEl.innerText = "✅ 适应性反应";
+                adviceEl.innerText = "你的情绪反应很恰当。试着向相关的人表达你的需求：“我感到...因为我看重...希望你...”";
+            }
+        }
+        
+        navTo('screen-result');
+    }
+
+    // 5. 保存图片
+    function saveCard() {
+        const captureElement = document.getElementById('capture-area');
+        
+        // 临时增加 scale 以提高清晰度
+        html2canvas(captureElement, {
+            scale: 2, 
+            backgroundColor: "#ffffff",
+            useCORS: true
+        }).then(canvas => {
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.download = `MindCompass_${new Date().getTime()}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
             
-            // 为每个情绪按钮添加点击事件
-            emotionButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const emotion = this.getAttribute('data-emotion');
-                    
-                    // 移除所有情绪类
-                    robotContainer.classList.remove('happy', 'angry', 'sad', 'fear');
-                    
-                    // 添加当前情绪类
-                    robotContainer.classList.add(emotion);
-                    
-                    // 更新情绪信息
-                    const data = emotionData[emotion];
-                    emotionTitle.innerHTML = `<i class="${data.icon}"></i> ${data.title}`;
-                    emotionDescription.textContent = data.description;
-                    languageDescription.textContent = data.language;
-                    speechExample.textContent = data.speech;
-                });
-            });
-            
-            // 默认显示喜悦情绪
-            robotContainer.classList.add('happy');
+            // 简单的提示
+            alert("图片已生成！如果未自动下载，请长按图片保存。");
         });
-    </script>
+    }
+
+    // 简单的漂浮动画 Keyframe
+    const styleSheet = document.createElement("style");
+    styleSheet.innerText = `
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+    `;
+    document.head.appendChild(styleSheet);
+
+</script>
 </body>
 </html>
